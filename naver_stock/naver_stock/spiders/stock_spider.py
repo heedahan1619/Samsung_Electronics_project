@@ -2,7 +2,7 @@ import scrapy
 from scrapy import Spider
 from scrapy import Request
 from datetime import datetime, timedelta
-from items import NaverStockItem
+from naver_stock.items import NaverStockItem
 
 class StockSpider(Spider):
     name = "stock"
@@ -10,6 +10,7 @@ class StockSpider(Spider):
     url = "https://finance.naver.com"
     list_url = url + "{}&page={}"
     url_list = []
+    items = []
     headers = {
         "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
     }
@@ -51,6 +52,8 @@ class StockSpider(Spider):
             page = 1
         else:
             page = (response.url).split("&")[1].split("=")[1]
+            
+        next_list = False
         
         for i in range(3, 16):
             if 8 <= i <= 10:
@@ -65,30 +68,14 @@ class StockSpider(Spider):
                 
                 if response.url not in self.url_list:
                     self.url_list.append(response.url)
-                
-            elif self.end_date < date:
-                next_list = True
-            
-        if next_list:
-            next_page = int(page) + 10
-            yield Request(
-                url=self.list_url.format(day, str(next_page)),
-                headers=self.headers,
-                callback=self.parse_stock
-            )
-        else: 
-            pass
-            
-        for url in self.url_list:
-            for i in range(3, 16):
-                if 8 <= i <= 10:
-                    continue
-                print(f"\nurl: {url}")
-                
-                Item = NaverStockItem()
-                Item["date"] = response.xpath(f"//table[@class='type2']/tr[{i}]/td[1]/span[@class='tah p10 gray03']/text()").get()
-                Item["date"] = datetime.strptime(date, "%Y.%m.%d")
-                Item["end_price"] = response.xpath(f"//table[@class='type2']/tr[{i}]/td[2]/span[@class='tah p11']/text()").get()
+                    
+                # for i in range(3, 16):
+                #     if 8 <= i <= 10:
+                #         continue
+
+                date = response.xpath(f"//table[@class='type2']/tr[{i}]/td[1]/span[@class='tah p10 gray03']/text()").get()
+                date = datetime.strptime(date, "%Y.%m.%d")
+                end_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[2]/span[@class='tah p11']/text()").get()
                 class_name = response.xpath(f"//table[@class='type2']/tr[{i}]/td[3]/span[contains(@class, 'tah p11') or contains(@class, 'tah p11 nv01') or contains(@class, 'tah pa11 red02')]/@class").get()
                 if "nv01" in class_name:
                     prefix = "하락"
@@ -97,16 +84,50 @@ class StockSpider(Spider):
                 else:
                     prefix = ""
                 value = response.xpath(f"//table[@class='type2']/tr[{i}]/td[3]/span[contains(@class, 'tah p11') or contains(@class, 'tah p11 nv01') or contains(@class, 'tah pa11 red02')]/text()").get().strip()
-                Item["change"] = f"{prefix} {value}"
-                Item["start_price"] = response.xpath(f"//table[@class='type2']/tr[{i}]/td[4]/span[@class='tah p11']/text()").get()
-                Item["high_price"] = response.xpath(f"//table[@class='type2']/tr[{i}]/td[5]/span[@class='tah p11']/text()").get()
-                Item["low_price"] = response.xpath(f"//table[@class='type2']/tr[{i}]/td[6]/span[@class='tah p11']/text()").get()
-                Item["volume"] = response.xpath(f"//table[@class='type2']/tr[{i}]/td[7]/span[@class='tah p11']/text()").get()
-                
-                print(f"date {Item['date']}")
-                print(f"end_price {Item['end_price']}")
-                print(f"change {Item['change']}")
-                print(f"start_price {Item['start_price']}")
-                print(f"high_price {Item['high_price']}")
-                print(f"low_price {Item['low_price']}")
-                print(f"volume {Item['volume']}")
+                change = f"{prefix} {value}"
+                start_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[4]/span[@class='tah p11']/text()").get()
+                high_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[5]/span[@class='tah p11']/text()").get()
+                low_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[6]/span[@class='tah p11']/text()").get()
+                volume = response.xpath(f"//table[@class='type2']/tr[{i}]/td[7]/span[@class='tah p11']/text()").get()
+
+                stock_item = {
+                "date": date,
+                "end_price": end_price,
+                "change": change,
+                "start_price": start_price,
+                "high_price": high_price,
+                "low_price": low_price,
+                "volume": volume
+                }
+
+                if self.start_date <= date <= self.end_date:
+                    item = NaverStockItem()
+                    item["date"] = stock_item["date"]
+                    item["end_price"] = stock_item["end_price"]
+                    item["change"] = stock_item["change"]
+                    item["start_price"] = stock_item["start_price"]
+                    item["high_price"] = stock_item["high_price"]
+                    item["low_price"] = stock_item["low_price"]
+                    item["volume"] = stock_item["volume"]
+                    
+                    print(f"\ndate: {item['date']}")
+                    print(f"end_price: {item['end_price']}")
+                    print(f"change: {item['change']}")
+                    print(f"start_price: {item['start_price']}")   
+                    print(f"high_price: {item['high_price']}")
+                    print(f"low_price: {item['low_price']}")
+                    print(f"volume: {item['volume']}")
+
+            elif self.end_date < date:
+                next_list = True
+        
+        if next_list:
+            next_page = int(page) + 10
+            yield Request(
+                url=self.list_url.format(day, str(next_page)),
+                headers=self.headers,
+                callback=self.parse_stock
+            )
+            
+        
+            

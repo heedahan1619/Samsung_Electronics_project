@@ -1,3 +1,4 @@
+import json
 import scrapy
 from scrapy import Spider
 from scrapy import Request
@@ -69,54 +70,59 @@ class StockSpider(Spider):
                 if response.url not in self.url_list:
                     self.url_list.append(response.url)
                     
-                # for i in range(3, 16):
-                #     if 8 <= i <= 10:
-                #         continue
+                for i in range(3, 16):
+                    if 8 <= i <= 10:
+                        continue
 
-                date = response.xpath(f"//table[@class='type2']/tr[{i}]/td[1]/span[@class='tah p10 gray03']/text()").get()
-                date = datetime.strptime(date, "%Y.%m.%d")
-                end_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[2]/span[@class='tah p11']/text()").get()
-                class_name = response.xpath(f"//table[@class='type2']/tr[{i}]/td[3]/span[contains(@class, 'tah p11') or contains(@class, 'tah p11 nv01') or contains(@class, 'tah pa11 red02')]/@class").get()
-                if "nv01" in class_name:
-                    prefix = "하락"
-                elif "red02" in class_name:
-                    prefix = "상승"
-                else:
-                    prefix = ""
-                value = response.xpath(f"//table[@class='type2']/tr[{i}]/td[3]/span[contains(@class, 'tah p11') or contains(@class, 'tah p11 nv01') or contains(@class, 'tah pa11 red02')]/text()").get().strip()
-                change = f"{prefix} {value}"
-                start_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[4]/span[@class='tah p11']/text()").get()
-                high_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[5]/span[@class='tah p11']/text()").get()
-                low_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[6]/span[@class='tah p11']/text()").get()
-                volume = response.xpath(f"//table[@class='type2']/tr[{i}]/td[7]/span[@class='tah p11']/text()").get()
+                    date = response.xpath(f"//table[@class='type2']/tr[{i}]/td[1]/span[@class='tah p10 gray03']/text()").get()
+                    date = datetime.strptime(date, "%Y.%m.%d")
+                    end_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[2]/span[@class='tah p11']/text()").get()
+                    class_name = response.xpath(f"//table[@class='type2']/tr[{i}]/td[3]/span[contains(@class, 'tah p11') or contains(@class, 'tah p11 nv01') or contains(@class, 'tah pa11 red02')]/@class").get()
+                    if "nv01" in class_name:
+                        prefix = "하락"
+                    elif "red02" in class_name:
+                        prefix = "상승"
+                    else:
+                        prefix = ""
+                    value = response.xpath(f"//table[@class='type2']/tr[{i}]/td[3]/span[contains(@class, 'tah p11') or contains(@class, 'tah p11 nv01') or contains(@class, 'tah pa11 red02')]/text()").get().strip()
+                    change = f"{prefix} {value}"
+                    start_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[4]/span[@class='tah p11']/text()").get()
+                    high_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[5]/span[@class='tah p11']/text()").get()
+                    low_price = response.xpath(f"//table[@class='type2']/tr[{i}]/td[6]/span[@class='tah p11']/text()").get()
+                    volume = response.xpath(f"//table[@class='type2']/tr[{i}]/td[7]/span[@class='tah p11']/text()").get()
 
-                stock_item = {
-                "date": date,
-                "end_price": end_price,
-                "change": change,
-                "start_price": start_price,
-                "high_price": high_price,
-                "low_price": low_price,
-                "volume": volume
-                }
+                    stock_item = {
+                    "date": date,
+                    "end_price": end_price,
+                    "change": change,
+                    "start_price": start_price,
+                    "high_price": high_price,
+                    "low_price": low_price,
+                    "volume": volume
+                    }
 
-                if self.start_date <= date <= self.end_date:
-                    item = NaverStockItem()
-                    item["date"] = stock_item["date"]
-                    item["end_price"] = stock_item["end_price"]
-                    item["change"] = stock_item["change"]
-                    item["start_price"] = stock_item["start_price"]
-                    item["high_price"] = stock_item["high_price"]
-                    item["low_price"] = stock_item["low_price"]
-                    item["volume"] = stock_item["volume"]
-                    
-                    print(f"\ndate: {item['date']}")
-                    print(f"end_price: {item['end_price']}")
-                    print(f"change: {item['change']}")
-                    print(f"start_price: {item['start_price']}")   
-                    print(f"high_price: {item['high_price']}")
-                    print(f"low_price: {item['low_price']}")
-                    print(f"volume: {item['volume']}")
+                    if self.start_date <= date <= self.end_date:
+                        item = NaverStockItem()
+                        item["date"] = stock_item["date"]
+                        item["end_price"] = stock_item["end_price"]
+                        item["change"] = stock_item["change"]
+                        item["start_price"] = stock_item["start_price"]
+                        item["high_price"] = stock_item["high_price"]
+                        item["low_price"] = stock_item["low_price"]
+                        item["volume"] = stock_item["volume"]
+                        
+                        print(f"\ndate: {item['date']}")
+                        print(f"end_price: {item['end_price']}")
+                        print(f"change: {item['change']}")
+                        print(f"start_price: {item['start_price']}")   
+                        print(f"high_price: {item['high_price']}")
+                        print(f"low_price: {item['low_price']}")
+                        print(f"volume: {item['volume']}")
+                        
+                        # 저장한 item을 json 파일로 저장
+                        json_filename = f"naver_stock_{self.start_date.strftime('%Y%m%d')}_{self.end_date.strftime('%Y%m%d')}.json"
+                        with open(json_filename, 'w', encoding='utf-8') as json_file:
+                            json.dump(self.items, json_file, ensure_ascii=False, indent=4)
 
             elif self.end_date < date:
                 next_list = True

@@ -10,7 +10,6 @@ class StockSpider(Spider):
     start_url = "https://finance.naver.com/item/sise.naver?code=005930"
     url = "https://finance.naver.com"
     list_url = url + "{}&page={}"
-    url_list = []
     items = []
     headers = {
         "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
@@ -19,7 +18,7 @@ class StockSpider(Spider):
     def __init__(
         self,
         start_date = "2023-08-01",
-        end_date = "2023-08-31",
+        end_date = "2023-08-31"
     ):
         self.start_date = datetime.strptime(start_date, "%Y-%m-%d")
         self.end_date = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
@@ -66,9 +65,6 @@ class StockSpider(Spider):
             
             if self.start_date <= date <= self.end_date:
                 next_list = True
-                
-                if response.url not in self.url_list:
-                    self.url_list.append(response.url)
                     
                 for i in range(3, 16):
                     if 8 <= i <= 10:
@@ -102,28 +98,9 @@ class StockSpider(Spider):
                     }
 
                     if self.start_date <= date <= self.end_date:
-                        item = NaverStockItem()
-                        item["date"] = stock_item["date"]
-                        item["end_price"] = stock_item["end_price"]
-                        item["change"] = stock_item["change"]
-                        item["start_price"] = stock_item["start_price"]
-                        item["high_price"] = stock_item["high_price"]
-                        item["low_price"] = stock_item["low_price"]
-                        item["volume"] = stock_item["volume"]
-                        
-                        print(f"\ndate: {item['date']}")
-                        print(f"end_price: {item['end_price']}")
-                        print(f"change: {item['change']}")
-                        print(f"start_price: {item['start_price']}")   
-                        print(f"high_price: {item['high_price']}")
-                        print(f"low_price: {item['low_price']}")
-                        print(f"volume: {item['volume']}")
-                        
-                        # 저장한 item을 json 파일로 저장
-                        json_filename = f"naver_stock_{self.start_date.strftime('%Y%m%d')}_{self.end_date.strftime('%Y%m%d')}.json"
-                        with open(json_filename, 'w', encoding='utf-8') as json_file:
-                            json.dump(self.items, json_file, ensure_ascii=False, indent=4)
-
+                        if stock_item not in self.items:
+                            self.items.append(stock_item)
+                    
             elif self.end_date < date:
                 next_list = True
         
@@ -134,6 +111,17 @@ class StockSpider(Spider):
                 headers=self.headers,
                 callback=self.parse_stock
             )
-            
+
+    def close(self, reason):
         
+        # 'date' 키에 있는 datetime 객체를 문자열로 변환
+        for item in self.items:
+            item['date'] = item['date'].strftime('%Y-%m-%d %H:%M:%S')
             
+        # 날짜를 기준으로 오름차순 정렬
+        self.items.sort(key=lambda x: x['date'])
+
+        # JSON 파일로 저장
+        json_filename = f"naver_stock_{self.start_date.strftime('%Y%m%d')}_{self.end_date.strftime('%Y%m%d')}.json"
+        with open(json_filename, 'w') as f:
+            json.dump(self.items, f, ensure_ascii=False, indent=4)

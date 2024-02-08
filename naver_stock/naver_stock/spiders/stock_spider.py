@@ -1,4 +1,4 @@
-import json
+import csv
 import scrapy
 from scrapy import Spider
 from scrapy import Request
@@ -111,17 +111,21 @@ class StockSpider(Spider):
                 headers=self.headers,
                 callback=self.parse_stock
             )
-
+    
     def close(self, reason):
-        
+    
         # 'date' 키에 있는 datetime 객체를 문자열로 변환
         for item in self.items:
             item['date'] = item['date'].strftime('%Y-%m-%d %H:%M:%S')
-            
+        
         # 날짜를 기준으로 오름차순 정렬
-        self.items.sort(key=lambda x: x['date'])
+        self.items.sort(key=lambda x: x["date"])
 
-        # JSON 파일로 저장
-        json_filename = f"naver_stock_{self.start_date.strftime('%Y%m%d')}_{self.end_date.strftime('%Y%m%d')}.json"
-        with open(json_filename, 'w') as f:
-            json.dump(self.items, f, ensure_ascii=False, indent=4)
+        # items를 csv 파일로 저장
+        csv_filename = f"naver_stock_{self.start_date.strftime('%Y%m%d')}_{self.end_date.strftime('%Y%m%d')}.csv"
+        with open(csv_filename, "w", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=self.items[0].keys())
+            
+            writer.writeheader()
+            for item in self.items:
+                writer.writerow(item)

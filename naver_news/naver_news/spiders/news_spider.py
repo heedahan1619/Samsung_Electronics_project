@@ -1,6 +1,8 @@
 import scrapy 
 from scrapy import Spider
 from scrapy import Request
+from datetime import datetime
+from naver_news.items import NaverNewsItem
 
 class NewsSpider(Spider):
     name = "news"
@@ -52,4 +54,48 @@ class NewsSpider(Spider):
             )
         
     def parse_news(self, response):
-        print(f"url: {response.url}")
+        """뉴스 기사 url 추출"""
+        for li in response.xpath("//ul[@class='type06_headline']/li"):
+            url = li.xpath("dl/dt/a/@href").get()
+            yield Request(
+                url=url,
+                headers=self.headers,
+                callback=self.parse_news_item
+            )
+            
+    def parse_news_item(self, response):
+        """뉴스 기사 항목 추출"""
+        
+        print(f"\nurl: {response.url}")
+        
+        item = NaverNewsItem()
+        
+        item["title"] = response.xpath("//h2[@id='title_area']/span/text() | //h4[@class='title']/text()").get()
+        date = response.xpath("//span[@class='media_end_head_info_datestamp_time _ARTICLE_DATE_TIME']/text() | //div[@class='info']/span/text()").get()
+        if "기사입력" in date:
+            date = date[5:]
+        if "오전" in date:
+            date = date.split(" ")[0] + " " + date.split(" ")[2]
+        if "오후" in date:
+            if date[-5:].split(":")[0] != "12":
+                time = int(date[-5:].split(":")[0])+12
+                time = str(time) + ":" + date[-5:].split(":")[1]
+                date = date.split(" ")[0] + " " + time
+            else:
+                date = date.split(" ")[0] + " " + date.split(" ")[2]
+        if len(date.split(" ")[1].split(":")[0]) == 1:
+            date = date.split(" ")[0] + " 0" + date.split(" ")[1].split(":")[0] + date[-3:]
+        item["date"] = datetime.strptime(date, "%Y.%m.%d. %H:%M")
+        
+        item["body"] = " ".join(response.xpath("//article[@id='dic_area']/strong/text() | //div[@id='newsEndContents']/strong/text() | //div[@id='newsEndContents']/text() | //article[@id='dic_area']/text()").getall()).strip().replace("\n", "")
+        
+        item["category"] = response.xpath("//em[@class='media_end_categorize_item']/text()").get()
+        if "sports" in response.url:
+            item["category"] = "스포츠"
+        elif "entertain" in response.url:
+            item["category"] = "연예"
+            
+        print(f"title: {item['title']}")
+        print(f"date: {item['date']}")
+        print(f"body: {item['body']}")
+        print(f"category: {item['category']}")

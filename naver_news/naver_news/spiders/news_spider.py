@@ -70,7 +70,6 @@ class NewsSpider(Spider):
         
         item = NaverNewsItem()
         
-        item["title"] = response.xpath("//h2[@id='title_area']/span/text() | //h4[@class='title']/text()").get()
         date = response.xpath("//span[@class='media_end_head_info_datestamp_time _ARTICLE_DATE_TIME']/text() | //div[@class='info']/span/text()").get()
         if "기사입력" in date:
             date = date[5:]
@@ -87,15 +86,28 @@ class NewsSpider(Spider):
             date = date.split(" ")[0] + " 0" + date.split(" ")[1].split(":")[0] + date[-3:]
         item["date"] = datetime.strptime(date, "%Y.%m.%d. %H:%M")
         
-        item["body"] = " ".join(response.xpath("//article[@id='dic_area']/strong/text() | //div[@id='newsEndContents']/strong/text() | //div[@id='newsEndContents']/text() | //article[@id='dic_area']/text()").getall()).strip().replace("\n", "")
-        
         item["category"] = response.xpath("//em[@class='media_end_categorize_item']/text()").get()
         if "sports" in response.url:
             item["category"] = "스포츠"
         elif "entertain" in response.url:
             item["category"] = "연예"
             
-        print(f"title: {item['title']}")
-        print(f"date: {item['date']}")
-        print(f"body: {item['body']}")
+        item["title"] = response.xpath("//h2[@id='title_area']/span/text() | //h4[@class='title']/text()").get()
+        
+        item["body"] = " ".join(response.xpath("//article[@id='dic_area']/strong/text() | //div[@id='newsEndContents']/strong/text() | //div[@id='newsEndContents']/text() | //article[@id='dic_area']/text()").getall()).strip().replace("\n", "")
+        
+        reaction_list = []
+        for li in response.xpath("//div[@id='likeItCountViewDiv']/ul/li | //div[@class='_reactionModule u_likeit']/ul/li"):
+            reaction_name = li.xpath("a/span[@class='u_likeit_list_name _label']/text()").get()
+            reaction_count = li.xpath("a/span[@class='u_likeit_list_count _count']/text()").get()
+            reaction_dict = {reaction_name:reaction_count}
+            if reaction_dict not in reaction_list:
+                reaction_list.append(reaction_dict)
+        item["reaction"] = reaction_list
+        
+        print(f"date: {item['date']}")    
         print(f"category: {item['category']}")
+        print(f"title: {item['title']}")
+        print(f"body: {item['body']}")
+        print(f"reaction: {item['reaction']}")
+        

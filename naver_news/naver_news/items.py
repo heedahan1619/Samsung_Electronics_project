@@ -12,6 +12,6 @@ class NaverNewsItem(scrapy.Item):
     date = scrapy.Field()
     category = scrapy.Field()
     title = scrapy.Field()
-    body = scrapy.Field()
+    content = scrapy.Field()
     reaction = scrapy.Field()
     pass

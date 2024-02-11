@@ -1,8 +1,12 @@
+import re
 import scrapy 
 from scrapy import Spider
 from scrapy import Request
 from datetime import datetime
 from naver_news.items import NaverNewsItem
+
+# 정규표현식 불러와서 적용
+import naver_news.constants as reg
 
 class NewsSpider(Spider):
     name = "news"
@@ -94,7 +98,11 @@ class NewsSpider(Spider):
             
         item["title"] = response.xpath("//h2[@id='title_area']/span/text() | //h4[@class='title']/text()").get()
         
-        item["body"] = " ".join(response.xpath("//article[@id='dic_area']/strong/text() | //div[@id='newsEndContents']/strong/text() | //div[@id='newsEndContents']/text() | //article[@id='dic_area']/text()").getall()).strip().replace("\n", "")
+        item["content"] = " ".join(response.xpath("//article[@id='dic_area']/strong/text() | //div[@id='newsEndContents']/strong/text() | //div[@id='newsEndContents']/text() | //article[@id='dic_area']/text()").getall()).strip().replace("\n", "")
+        item["content"] = re.sub(r"\s{2,}", " ", item["content"]) #2개 이상인 공백을 공백으로 대체
+        #정규표현식 적용
+        regex = re.compile("|".join(reg.REGEX_PATTERN["연합뉴스"]))
+        item["content"] = re.sub(regex, "", item["content"])
         
         reaction_list = []
         for li in response.xpath("//div[@id='likeItCountViewDiv']/ul/li | //div[@class='_reactionModule u_likeit']/ul/li"):
@@ -105,9 +113,10 @@ class NewsSpider(Spider):
                 reaction_list.append(reaction_dict)
         item["reaction"] = reaction_list
         
+        
         print(f"date: {item['date']}")    
         print(f"category: {item['category']}")
         print(f"title: {item['title']}")
-        print(f"body: {item['body']}")
+        print(f"content: {item['content']}")
         print(f"reaction: {item['reaction']}")
         

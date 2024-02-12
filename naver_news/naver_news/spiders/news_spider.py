@@ -1,4 +1,6 @@
 import re
+import requests
+from bs4 import BeautifulSoup
 import scrapy 
 from scrapy import Spider
 from scrapy import Request
@@ -90,11 +92,10 @@ class NewsSpider(Spider):
             date = date.split(" ")[0] + " 0" + date.split(" ")[1].split(":")[0] + date[-3:]
         item["date"] = datetime.strptime(date, "%Y.%m.%d. %H:%M")
         
-        item["category"] = response.xpath("//em[@class='media_end_categorize_item']/text()").get()
         if "sports" in response.url:
             item["category"] = "스포츠"
-        elif "entertain" in response.url:
-            item["category"] = "연예"
+        else:
+            item["category"] = item["category"] = response.xpath("//em[@class='media_end_categorize_item']/text()").get()
             
         item["title"] = response.xpath("//h2[@id='title_area']/span/text() | //h4[@class='title']/text()").get()
         
@@ -104,19 +105,25 @@ class NewsSpider(Spider):
         regex = re.compile("|".join(reg.REGEX_PATTERN["연합뉴스"]))
         item["content"] = re.sub(regex, "", item["content"])
         
-        reaction_list = []
-        for li in response.xpath("//div[@id='likeItCountViewDiv']/ul/li | //div[@class='_reactionModule u_likeit']/ul/li"):
-            reaction_name = li.xpath("a/span[@class='u_likeit_list_name _label']/text()").get()
-            reaction_count = li.xpath("a/span[@class='u_likeit_list_count _count']/text()").get()
-            reaction_dict = {reaction_name:reaction_count}
-            if reaction_dict not in reaction_list:
-                reaction_list.append(reaction_dict)
-        item["reaction"] = reaction_list
+        #기사 반응 추출(BeautifulSoup으로)
+        url = response.url
+        response = requests.get(url)
+        html = response.text
+        soup = BeautifulSoup(html, "html.parser")
         
+        reaction_dict = {}        
+        labels = soup.select("ul.u_likeit_layer._faceLayer > li > a > span.u_likeit_list_name._label")
+        counts = soup.select("div._reactionModule.u_likeit > ul > li > a > span.u_likeit_list_count._count")
         
+        for label, count in zip(labels, counts):
+            label_text = label.get_text()
+            count_text = count.get_text()
+            reaction_dict[label_text] =  count_text
+        item['reaction'] = reaction_dict
+
         print(f"date: {item['date']}")    
         print(f"category: {item['category']}")
         print(f"title: {item['title']}")
         print(f"content: {item['content']}")
         print(f"reaction: {item['reaction']}")
-        
+            

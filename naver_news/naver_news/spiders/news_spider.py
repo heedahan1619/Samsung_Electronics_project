@@ -76,12 +76,28 @@ class NewsSpider(Spider):
         
         item = NaverNewsItem()
         
-        date = response.xpath("//span[@class='media_end_head_info_datestamp_time _ARTICLE_DATE_TIME']/text() | //div[@class='info']/span/text()").get()
-        if "기사입력" in date:
-            date = date[5:]
+        #일반 및 스포츠 기사
+        if "news" in response.url:
+            date = response.xpath("//span[@class='media_end_head_info_datestamp_time _ARTICLE_DATE_TIME']/text() | //div[@class='info']/span/text()").get()
+            if "기사입력" in date:
+                date = date[5:]
+            if "sports" in response.url:
+                item["category"] = "스포츠"
+            else:
+                item["category"] = item["category"] = response.xpath("//em[@class='media_end_categorize_item']/text()").get()
+            item["title"] = response.xpath("//h2[@id='title_area']/span/text() | //h4[@class='title']/text()").get().strip().replace("\n", "")    
+            item["content"] = " ".join(response.xpath("//article[@id='dic_area']/strong/text() | //div[@id='newsEndContents']/strong/text() | //div[@id='newsEndContents']/text() | //article[@id='dic_area']/text()").getall()).strip().replace("\n", "")
+        
+        # 연예 기사
+        else:
+            date = response.xpath("//div[@class='article_info']/span/em/text()").get()
+            item["category"] = "연예"
+            item["title"] = response.xpath("//h2[@class='end_tit']/text()").get().strip()
+            item["content"] = " ".join(response.xpath("//div[@id='articeBody']/text()").getall()).strip().replace("\n", "")
+        
         if "오전" in date:
-            date = date.split(" ")[0] + " " + date.split(" ")[2]
-        if "오후" in date:
+            date = date.split("오전")[0] + " " + date.split("오전")[1]
+        else:
             if date[-5:].split(":")[0] != "12":
                 time = int(date[-5:].split(":")[0])+12
                 time = str(time) + ":" + date[-5:].split(":")[1]
@@ -92,38 +108,28 @@ class NewsSpider(Spider):
             date = date.split(" ")[0] + " 0" + date.split(" ")[1].split(":")[0] + date[-3:]
         item["date"] = datetime.strptime(date, "%Y.%m.%d. %H:%M")
         
-        if "sports" in response.url:
-            item["category"] = "스포츠"
-        else:
-            item["category"] = item["category"] = response.xpath("//em[@class='media_end_categorize_item']/text()").get()
-            
-        item["title"] = response.xpath("//h2[@id='title_area']/span/text() | //h4[@class='title']/text()").get()
-        
-        item["content"] = " ".join(response.xpath("//article[@id='dic_area']/strong/text() | //div[@id='newsEndContents']/strong/text() | //div[@id='newsEndContents']/text() | //article[@id='dic_area']/text()").getall()).strip().replace("\n", "")
         item["content"] = re.sub(r"\s{2,}", " ", item["content"]) #2개 이상인 공백을 공백으로 대체
         #정규표현식 적용
         regex = re.compile("|".join(reg.REGEX_PATTERN["연합뉴스"]))
         item["content"] = re.sub(regex, "", item["content"])
         
-        #기사 반응 추출(BeautifulSoup으로)
+        #기사 반응 추출(BeautifulSoup)
         url = response.url
         response = requests.get(url)
         html = response.text
         soup = BeautifulSoup(html, "html.parser")
-        
         reaction_dict = {}        
         labels = soup.select("ul.u_likeit_layer._faceLayer > li > a > span.u_likeit_list_name._label")
         counts = soup.select("div._reactionModule.u_likeit > ul > li > a > span.u_likeit_list_count._count")
-        
         for label, count in zip(labels, counts):
             label_text = label.get_text()
             count_text = count.get_text()
-            reaction_dict[label_text] =  count_text
+            reaction_dict[label_text] =  count_text    
         item['reaction'] = reaction_dict
-
+        
         print(f"date: {item['date']}")    
         print(f"category: {item['category']}")
         print(f"title: {item['title']}")
         print(f"content: {item['content']}")
         print(f"reaction: {item['reaction']}")
-            
+        

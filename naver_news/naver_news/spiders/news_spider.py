@@ -1,4 +1,5 @@
 import re
+import json
 import requests
 from bs4 import BeautifulSoup
 import scrapy 
@@ -91,10 +92,14 @@ class NewsSpider(Spider):
         # 연예 기사
         else:
             date = response.xpath("//div[@class='article_info']/span/em/text()").get()
+            
             item["category"] = "연예"
+            
             item["title"] = response.xpath("//h2[@class='end_tit']/text()").get().strip()
+            
             item["content"] = " ".join(response.xpath("//div[@id='articeBody']/text()").getall()).strip().replace("\n", "")
         
+        #시간 전처리
         if "오전" in date:
             date = date.split("오전")[0] + " " + date.split("오전")[1]
         else:
@@ -106,30 +111,49 @@ class NewsSpider(Spider):
                 date = date.split(" ")[0] + " " + date.split(" ")[2]
         if len(date.split(" ")[1].split(":")[0]) == 1:
             date = date.split(" ")[0] + " 0" + date.split(" ")[1].split(":")[0] + date[-3:]
+            
         item["date"] = datetime.strptime(date, "%Y.%m.%d. %H:%M")
         
-        item["content"] = re.sub(r"\s{2,}", " ", item["content"]) #2개 이상인 공백을 공백으로 대체
+        #2개 이상인 공백을 공백으로 대체
+        item["content"] = re.sub(r"\s{2,}", " ", item["content"]) 
         #정규표현식 적용
         regex = re.compile("|".join(reg.REGEX_PATTERN["연합뉴스"]))
         item["content"] = re.sub(regex, "", item["content"])
         
-        #기사 반응 추출(BeautifulSoup)
-        url = response.url
-        response = requests.get(url)
-        html = response.text
-        soup = BeautifulSoup(html, "html.parser")
-        reaction_dict = {}        
-        labels = soup.select("ul.u_likeit_layer._faceLayer > li > a > span.u_likeit_list_name._label")
-        counts = soup.select("div._reactionModule.u_likeit > ul > li > a > span.u_likeit_list_count._count")
-        for label, count in zip(labels, counts):
-            label_text = label.get_text()
-            count_text = count.get_text()
-            reaction_dict[label_text] =  count_text    
-        item['reaction'] = reaction_dict
+        reaction_dict = {}
+        for a in response.xpath("//div[@class='_reactionModule u_likeit']/ul/li/a"):
+            name = a.xpath("span[@class='u_likeit_list_name _label']/text()").get()
+            count = a.xpath("span[@class='u_likeit_list_count _count']/text()").get()
+            reaction_dict[name] = count
+        item["reaction"] = reaction_dict
         
-        print(f"date: {item['date']}")    
-        print(f"category: {item['category']}")
-        print(f"title: {item['title']}")
-        print(f"content: {item['content']}")
+        #BeautifulSoup으로 json파일로 구성된 기사 반응 추출
+        update = {}
+        
+        if "aid" in response.url:
+            news_id = response.url.split("=")[-1]
+        else:
+            news_id = response.url.split("/")[-1]
+
+        reaction_url = f"https://news.like.naver.com/v1/search/contents?q=NEWS%5Bne_001_{news_id}%5D"
+        res = requests.get(reaction_url, headers=self.headers)
+        reactions = res.json()["contents"][0]["reactions"]
+        label = res.json()["contents"][0]["reactionTextMap"]["ko"]
+        
+        for reaction in reactions:
+            type = reaction["reactionType"]
+            count = reaction["count"]
+            name = label[type]
+            update[name] = count
+        
+        #데이터 업데이트
+        for key in update:
+            if key in reaction_dict:
+                reaction_dict[key] = update[key]
+            
+        # print(f"date: {item['date']}")    
+        # print(f"category: {item['category']}")
+        # print(f"title: {item['title']}")
+        # print(f"content: {item['content']}")
         print(f"reaction: {item['reaction']}")
         

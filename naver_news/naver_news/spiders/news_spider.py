@@ -1,7 +1,6 @@
 import re
 import json
 import requests
-from bs4 import BeautifulSoup
 import scrapy 
 from scrapy import Spider
 from scrapy import Request
@@ -72,7 +71,7 @@ class NewsSpider(Spider):
             
     def parse_news_item(self, response):
         """뉴스 기사 항목 추출"""
-        
+            
         print(f"\nurl: {response.url}")
         
         item = NaverNewsItem()
@@ -135,7 +134,11 @@ class NewsSpider(Spider):
         else:
             news_id = response.url.split("/")[-1]
 
-        reaction_url = f"https://news.like.naver.com/v1/search/contents?q=NEWS%5Bne_001_{news_id}%5D"
+        if "sports" in response.url:
+            reaction_url = f"https://sports.like.naver.com/v1/search/contents?q=SPORTS%5Bne_001_{news_id}%5D"
+        else:
+            reaction_url = f"https://news.like.naver.com/v1/search/contents?q=NEWS%5Bne_001_{news_id}%5D"
+        
         res = requests.get(reaction_url, headers=self.headers)
         reactions = res.json()["contents"][0]["reactions"]
         label = res.json()["contents"][0]["reactionTextMap"]["ko"]

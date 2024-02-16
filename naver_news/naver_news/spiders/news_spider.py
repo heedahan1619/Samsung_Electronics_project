@@ -1,25 +1,61 @@
+import sys
 import re
-import json
 import requests
-import scrapy 
+import scrapy
 from scrapy import Spider
 from scrapy import Request
-from datetime import datetime
+from datetime import datetime, timedelta
 from naver_news.items import NaverNewsItem
 
 # 정규표현식 불러와서 적용
 import naver_news.constants as reg
 
+# 캐시 비활성화
+sys.dont_write_bytecode = True
+
+# 방송/통신 언론사 코드 딕셔너리
+oid_list = {
+    "뉴스1":"421"
+    , "뉴시스":"003"
+    , "연합뉴스":"001"
+    , "연합뉴스TV":"449"
+    , "한국경제TV":"215"
+    , "JTBC":"437"
+    , "KBS":"056"
+    , "MBC":"214"
+    , "MBN":"057"
+    , "SBS":"055"
+    , "SBS Biz":"374"
+    , "TV조선":"448"
+    , "YTN":"052"
+}
+
 class NewsSpider(Spider):
-    name = "news"
+    name = "news" # spider 이름
     start_url = "https://news.naver.com/main/list.naver?mode=LPOD&mid=sec&oid=001"
-    url = "https://news.naver.com/main/list.naver"
-    list_url = url + "{}"
-    date_list = []
-    page_list = []
     headers = {
         "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
     }
+    
+    oid_name = "연합뉴스" # 언론사명
+    oid = oid_list[oid_name] # 언론사 코드
+    
+    # 기간 입력
+    start_date = "20230801"
+    end_date = "20230831"
+    
+    url = f"https://news.naver.com/main/list.naver"
+    date_url = f"https://news.naver.com/main/list.naver?mode=LPOD&mid=sec&oid={oid_list[oid_name]}&date="
+    
+    page_list = []
+    
+    def __init__(
+        self,
+        start_date = "20230801",
+        end_date = "20230831",
+    ):
+        self.start_date = datetime.strptime(start_date, "%Y%m%d")
+        self.end_date = datetime.strptime(end_date, "%Y%m%d") + timedelta(days=1) - timedelta(seconds=1)
     
     def start_requests(self):
         """크롤러가 시작하면서 실행하는 메소드"""
@@ -27,12 +63,32 @@ class NewsSpider(Spider):
             scrapy.Request(
                 url=self.start_url,
                 headers=self.headers,
-                callback=self.parse_list
+                callback=self.parse_date
             )
         ]
         
+    def parse_date(self, response):
+        """기간 내 뉴스 url 추출"""
+        
+        date_list = []
+        date = self.start_date
+        while date <= self.end_date:
+            date_list.append(date)
+            date += timedelta(days=1)
+        
+        for date in date_list:
+            date = str(date).split(" ")[0].replace("-", "")
+            print(self.date_url + date)
+            yield Request(
+                url=self.date_url + date,
+                headers=self.headers,
+                callback=self.parse_list
+            )
+        
     def parse_list(self, response):
         """뉴스 목록 확인"""
+        
+        # print(f"\n{response.url}")
         
         pages = response.xpath("//div[@class='paging']/a/@href").getall()
         
@@ -40,14 +96,14 @@ class NewsSpider(Spider):
         
         for page in pages:
             next_list = True
-            page = self.list_url.format(page)
+            page = self.url + page
             if page not in self.page_list:
                 self.page_list.append(page)
         
         if next_list:
             last_page = self.page_list[-1]
             yield Request(
-                url=self.list_url.format(last_page),
+                url=self.url + last_page,
                 headers=self.headers,
                 callback=self.parse_list
             )
@@ -61,6 +117,9 @@ class NewsSpider(Spider):
         
     def parse_news(self, response):
         """뉴스 기사 url 추출"""
+        
+        # print(f"url: {response.url}")
+        
         for li in response.xpath("//ul[@class='type06_headline']/li"):
             url = li.xpath("dl/dt/a/@href").get()
             yield Request(
@@ -111,7 +170,7 @@ class NewsSpider(Spider):
         if len(date.split(" ")[1].split(":")[0]) == 1:
             date = date.split(" ")[0] + " 0" + date.split(" ")[1].split(":")[0] + date[-3:]
             
-        item["date"] = datetime.strptime(date, "%Y.%m.%d. %H:%M")
+        item['date'] = datetime.strptime(date, "%Y.%m.%d. %H:%M")
         
         #2개 이상인 공백을 공백으로 대체
         item["content"] = re.sub(r"\s{2,}", " ", item["content"]) 
@@ -154,9 +213,9 @@ class NewsSpider(Spider):
             if key in reaction_dict:
                 reaction_dict[key] = update[key]
             
-        # print(f"date: {item['date']}")    
-        # print(f"category: {item['category']}")
-        # print(f"title: {item['title']}")
-        # print(f"content: {item['content']}")
+        print(f"date: {item['date']}")    
+        print(f"category: {item['category']}")
+        print(f"title: {item['title']}")
+        print(f"content: {item['content']}")
         print(f"reaction: {item['reaction']}")
         

@@ -1,3 +1,4 @@
+import csv
 import sys
 import re
 import requests
@@ -48,6 +49,7 @@ class NewsSpider(Spider):
     date_url = f"https://news.naver.com/main/list.naver?mode=LPOD&mid=sec&oid={oid_list[oid_name]}&date="
     
     page_list = []
+    items = []
     
     def __init__(
         self,
@@ -135,7 +137,7 @@ class NewsSpider(Spider):
         
         item = NaverNewsItem()
         
-        #일반 및 스포츠 기사
+        # 일반 및 스포츠 기사
         if "news" in response.url:
             date = response.xpath("//span[@class='media_end_head_info_datestamp_time _ARTICLE_DATE_TIME']/text() | //div[@class='info']/span/text()").get()
             if "기사입력" in date:
@@ -143,21 +145,19 @@ class NewsSpider(Spider):
             if "sports" in response.url:
                 item["category"] = "스포츠"
             else:
-                item["category"] = item["category"] = response.xpath("//em[@class='media_end_categorize_item']/text()").get()
-            item["title"] = response.xpath("//h2[@id='title_area']/span/text() | //h4[@class='title']/text()").get().strip().replace("\n", "")    
+                item["category"] = response.xpath("//em[@class='media_end_categorize_item']/text()").get()
+            item["title"] = response.xpath("//h2[@id='title_area']/span/text() | //h4[@class='title']/text()").get().strip().replace("\n", "")
             item["content"] = " ".join(response.xpath("//article[@id='dic_area']/strong/text() | //div[@id='newsEndContents']/strong/text() | //div[@id='newsEndContents']/text() | //article[@id='dic_area']/text()").getall()).strip().replace("\n", "")
         
         # 연예 기사
         else:
             date = response.xpath("//div[@class='article_info']/span/em/text()").get()
-            
             item["category"] = "연예"
-            
             item["title"] = response.xpath("//h2[@class='end_tit']/text()").get().strip()
-            
             item["content"] = " ".join(response.xpath("//div[@id='articeBody']/text()").getall()).strip().replace("\n", "")
         
-        #시간 전처리
+        """전처리"""
+        # 시간 형식 통일
         if "오전" in date:
             date = date.split("오전")[0] + " " + date.split("오전")[1]
         else:
@@ -169,15 +169,14 @@ class NewsSpider(Spider):
                 date = date.split(" ")[0] + " " + date.split(" ")[2]
         if len(date.split(" ")[1].split(":")[0]) == 1:
             date = date.split(" ")[0] + " 0" + date.split(" ")[1].split(":")[0] + date[-3:]
-            
-        item['date'] = datetime.strptime(date, "%Y.%m.%d. %H:%M")
-        
-        #2개 이상인 공백을 공백으로 대체
+        item["date"] = datetime.strptime(date, "%Y.%m.%d. %H:%M")
+        # 2개 이상인 공백을 공백으로 대체
         item["content"] = re.sub(r"\s{2,}", " ", item["content"]) 
-        #정규표현식 적용
+        # 정규표현식 적용
         regex = re.compile("|".join(reg.REGEX_PATTERN["연합뉴스"]))
         item["content"] = re.sub(regex, "", item["content"])
         
+        """기사 반응"""
         reaction_dict = {}
         for a in response.xpath("//div[@class='_reactionModule u_likeit']/ul/li/a"):
             name = a.xpath("span[@class='u_likeit_list_name _label']/text()").get()
@@ -187,35 +186,52 @@ class NewsSpider(Spider):
         
         #BeautifulSoup으로 json파일로 구성된 기사 반응 추출
         update = {}
-        
         if "aid" in response.url:
             news_id = response.url.split("=")[-1]
         else:
             news_id = response.url.split("/")[-1]
-
         if "sports" in response.url:
             reaction_url = f"https://sports.like.naver.com/v1/search/contents?q=SPORTS%5Bne_001_{news_id}%5D"
         else:
             reaction_url = f"https://news.like.naver.com/v1/search/contents?q=NEWS%5Bne_001_{news_id}%5D"
-        
         res = requests.get(reaction_url, headers=self.headers)
         reactions = res.json()["contents"][0]["reactions"]
         label = res.json()["contents"][0]["reactionTextMap"]["ko"]
-        
-        for reaction in reactions:
-            type = reaction["reactionType"]
-            count = reaction["count"]
+        for react in reactions:
+            type = react["reactionType"]
+            count = react["count"]
             name = label[type]
             update[name] = count
         
-        #데이터 업데이트
+        # 데이터 업데이트
         for key in update:
             if key in reaction_dict:
                 reaction_dict[key] = update[key]
             
-        print(f"date: {item['date']}")    
+        print(f"date: {item['date']}")
         print(f"category: {item['category']}")
         print(f"title: {item['title']}")
         print(f"content: {item['content']}")
         print(f"reaction: {item['reaction']}")
         
+        if item not in self.items:
+            self.items.append(item)
+
+    def close(self, reason):
+        """파일 저장"""
+        
+        # 날짜를 기준으로 오름차순 정렬
+        self.items.sort(key=lambda x: x["date"])
+
+        # item을 csv 파일로 저장
+        csv_filename = f"naver_news_{self.start_date.strftime('%Y%m%d')}_{self.end_date.strftime('%Y%m%d')}.csv"
+        with open(csv_filename, "w", newline="") as csvfile:
+            fieldnames = list(self.items[0].keys())  # 모든 아이템의 키를 필드네임으로 사용
+            fieldnames.remove("date")  # 'date' 필드를 제거
+            fieldnames.insert(0, "date")  # 'date'를 맨 앞에 추가
+            
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            writer.writeheader()
+            for item in self.items:
+                writer.writerow(item)

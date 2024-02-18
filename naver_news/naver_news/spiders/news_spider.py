@@ -222,16 +222,25 @@ class NewsSpider(Spider):
         
         # 날짜를 기준으로 오름차순 정렬
         self.items.sort(key=lambda x: x["date"])
+        
+        # 하루씩 저장하도록 수정
+        current_date = self.start_date
+        while current_date <= self.end_date:
+            # 해당 날짜 범위의 아이템들을 필터링
+            filtered_items = [item for item in self.items if item["date"].date() == current_date.date()]
+            
+            if filtered_items:
+                # 해당 날짜 범위에 아이템이 있는 경우에만 저장
+                csv_filename = f"naver_news_{current_date.strftime('%Y%m%d')}.csv"
+                with open(csv_filename, "w", newline="") as csvfile:
+                    fieldnames = list(filtered_items[0].keys())  # 모든 아이템의 키를 필드네임으로 사용
+                    fieldnames.remove("date")  # 'date' 필드를 제거
+                    fieldnames.insert(0, "date")  # 'date'를 맨 앞에 추가
 
-        # item을 csv 파일로 저장
-        csv_filename = f"naver_news_{self.start_date.strftime('%Y%m%d')}_{self.end_date.strftime('%Y%m%d')}.csv"
-        with open(csv_filename, "w", newline="") as csvfile:
-            fieldnames = list(self.items[0].keys())  # 모든 아이템의 키를 필드네임으로 사용
-            fieldnames.remove("date")  # 'date' 필드를 제거
-            fieldnames.insert(0, "date")  # 'date'를 맨 앞에 추가
-            
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            
-            writer.writeheader()
-            for item in self.items:
-                writer.writerow(item)
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writeheader()
+                    for item in filtered_items:
+                        writer.writerow(item)
+
+            # 다음 날짜로 이동
+            current_date += timedelta(days=1)
